@@ -23,12 +23,21 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [tab, setTab] = useState<Tab>("pending");
   const [loading, setLoading] = useState(true);
+  const [posting, setPosting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchPosts(status: Tab) {
     setLoading(true);
-    const res = await fetch(`/api/posts?status=${status}`);
-    setPosts(await res.json());
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch(`/api/posts?status=${status}`);
+      if (!res.ok) throw new Error(`Failed to load posts (${res.status})`);
+      setPosts(await res.json());
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -36,12 +45,32 @@ export default function Dashboard() {
   }, [tab]);
 
   async function updateStatus(id: string, status: "approved" | "rejected") {
-    await fetch(`/api/posts/${id}`, {
+    const res = await fetch(`/api/posts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    setPosts((prev) => prev.filter((p) => p._id !== id));
+    if (res.ok) {
+      setPosts((prev) => prev.filter((p) => p._id !== id));
+    }
+  }
+
+  async function postNow(id: string) {
+    setPosting(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/posts/${id}`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Post failed");
+      } else {
+        setPosts((prev) => prev.filter((p) => p._id !== id));
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setPosting(null);
+    }
   }
 
   return (
@@ -62,6 +91,9 @@ export default function Dashboard() {
       </div>
 
       <main className="px-8 py-8">
+        {error && (
+          <p className="text-red-500 text-sm mb-4">{error}</p>
+        )}
         {loading ? (
           <p className="text-neutral-400 text-sm">Loading...</p>
         ) : posts.length === 0 ? (
@@ -122,6 +154,15 @@ export default function Dashboard() {
                         Reject
                       </button>
                     </div>
+                  )}
+                  {tab === "approved" && (
+                    <button
+                      onClick={() => postNow(post._id)}
+                      disabled={posting === post._id}
+                      className="w-full py-1.5 bg-black text-white text-xs rounded hover:bg-neutral-800 transition-colors disabled:opacity-40"
+                    >
+                      {posting === post._id ? "Posting..." : "Post now"}
+                    </button>
                   )}
                 </div>
               </div>

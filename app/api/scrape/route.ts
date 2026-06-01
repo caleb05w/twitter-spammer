@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
-import { exec } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import path from "path";
+
+const execFileAsync = promisify(execFile);
 
 export async function POST() {
   const scriptPath = path.join(process.cwd(), "bot", "scraper.py");
-
-  return new Promise<NextResponse>((resolve) => {
-    exec(`python3 ${scriptPath} --force`, (error, stdout, stderr) => {
-      if (error) {
-        resolve(NextResponse.json({ ok: false, error: stderr }, { status: 500 }));
-      } else {
-        resolve(NextResponse.json({ ok: true, output: stdout.trim() }));
-      }
-    });
-  });
+  try {
+    const { stdout } = await execFileAsync("python3", [scriptPath, "--force"]);
+    return NextResponse.json({ ok: true, output: stdout.trim() });
+  } catch (error: any) {
+    return NextResponse.json({ ok: false, error: error.stderr || error.message }, { status: 500 });
+  }
 }

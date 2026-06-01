@@ -1,8 +1,15 @@
+import os
 import requests
 from datetime import datetime, timezone
 
-SUPABASE_URL = "https://tuzpqmdnxvlzwqthgseg.supabase.co/rest/v1/bestdesignsonx"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1enBxbWRueHZsendxdGhnc2VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzUxOTY4MjYsImV4cCI6MjA1MDc3MjgyNn0.rIjO0FCY9rPgsJXCxBho3sCRiepy3s319_BoK6DPZ-U"
+SUPABASE_URL = os.getenv(
+    "BESTDESIGNSONX_SUPABASE_URL",
+    "https://tuzpqmdnxvlzwqthgseg.supabase.co/rest/v1/bestdesignsonx",
+)
+SUPABASE_KEY = os.getenv(
+    "BESTDESIGNSONX_SUPABASE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1enBxbWRueHZsendxdGhnc2VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzUxOTY4MjYsImV4cCI6MjA1MDc3MjgyNn0.rIjO0FCY9rPgsJXCxBho3sCRiepy3s319_BoK6DPZ-U",
+)
 
 HEADERS = {
     "apikey": SUPABASE_KEY,

@@ -4,8 +4,9 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from datetime import datetime, timezone
 
-load_dotenv("../.env")
-load_dotenv("../.env.local")
+_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_dir, "../.env"))
+load_dotenv(os.path.join(_dir, "../.env.local"))
 
 from sources import bestdesignsonx, details_so
 

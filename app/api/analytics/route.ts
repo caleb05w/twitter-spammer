@@ -4,7 +4,6 @@ import { getDb } from "@/lib/mongodb";
 export async function GET() {
   const db = await getDb();
   const posts = db.collection("posts");
-
   const runs = db.collection("scrape_runs");
 
   const [sources, statusCounts, recentPosts, lastRun, postedPosts] = await Promise.all([
@@ -40,7 +39,7 @@ export async function GET() {
   return NextResponse.json({
     sources: sources.map((s) => ({
       ...s,
-      lastPost: { ...s.lastPost, _id: s.lastPost._id.toString() },
+      lastPost: s.lastPost ? { ...s.lastPost, _id: s.lastPost._id.toString() } : null,
     })),
     statusCounts: Object.fromEntries(statusCounts.map((s) => [s._id, s.count])),
     recentPosts: recentPosts.map((p) => ({ ...p, _id: p._id.toString() })),

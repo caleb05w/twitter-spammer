@@ -1,14 +1,15 @@
 import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI!;
-const client = new MongoClient(uri);
+const uri = process.env.MONGODB_URI;
+if (!uri) throw new Error("MONGODB_URI is not set");
 
-let connected = false;
+const client = new MongoClient(uri);
+let connectionPromise: Promise<MongoClient> | null = null;
 
 export async function getDb() {
-  if (!connected) {
-    await client.connect();
-    connected = true;
+  if (!connectionPromise) {
+    connectionPromise = client.connect();
   }
+  await connectionPromise;
   return client.db("design-scrape");
 }

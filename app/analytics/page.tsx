@@ -62,8 +62,13 @@ export default function Analytics() {
   const [scrapeResult, setScrapeResult] = useState<string | null>(null);
 
   async function fetchAnalytics() {
-    const res = await fetch("/api/analytics");
-    setData(await res.json());
+    try {
+      const res = await fetch("/api/analytics");
+      if (!res.ok) throw new Error(`${res.status}`);
+      setData(await res.json());
+    } catch (e) {
+      console.error("Failed to load analytics:", e);
+    }
   }
 
   useEffect(() => {
@@ -110,14 +115,14 @@ export default function Analytics() {
             {data?.sources.map((source) => (
               <div key={source._id} className="border border-neutral-200 rounded-lg p-5 flex items-center gap-6">
                 <div className="w-12 h-12 rounded overflow-hidden bg-neutral-100 shrink-0">
-                  {source.lastPost.cover_url && (
+                  {source.lastPost?.cover_url && (
                     <ProxyImage src={source.lastPost.cover_url} className="w-full h-full object-cover" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{source._id}</p>
                   <p className="text-[11px] text-neutral-400 truncate">
-                    Last: @{source.lastPost.handle} — {source.lastPost.tweet_text?.slice(0, 60)}...
+                    {source.lastPost ? `Last: @${source.lastPost.handle} — ${source.lastPost.tweet_text?.slice(0, 60) ?? ""}` : "No posts yet"}
                   </p>
                 </div>
                 <div className="text-right shrink-0">

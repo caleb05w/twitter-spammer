@@ -7,11 +7,18 @@ type Props = {
 };
 
 function proxied(url: string) {
-  return url.includes("b-cdn.net") ? `/api/proxy?url=${encodeURIComponent(url)}` : url;
+  try {
+    const { hostname } = new URL(url);
+    if (hostname.endsWith(".b-cdn.net") || hostname.endsWith(".details.so")) {
+      return `/api/proxy?url=${encodeURIComponent(url)}`;
+    }
+  } catch {}
+  return url;
 }
 
 function isVideo(url: string) {
-  return url.includes(".mp4");
+  const clean = url.split("?")[0].toLowerCase();
+  return clean.endsWith(".mp4") || clean.endsWith(".mov") || clean.endsWith(".webm");
 }
 
 export default function ProxyImage({ src, alt = "", className }: Props) {
