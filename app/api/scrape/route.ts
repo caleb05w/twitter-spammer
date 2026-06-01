@@ -6,7 +6,7 @@ export async function POST() {
   const scriptPath = path.join(process.cwd(), "bot", "scraper.py");
 
   return new Promise<NextResponse>((resolve) => {
-    exec(`python3 ${scriptPath}`, (error, stdout, stderr) => {
+    exec(`python3 ${scriptPath} --force`, (error, stdout, stderr) => {
       if (error) {
         resolve(NextResponse.json({ ok: false, error: stderr }, { status: 500 }));
       } else {

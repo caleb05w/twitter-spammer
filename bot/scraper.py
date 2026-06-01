@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -58,17 +59,20 @@ def run():
     runs = db["scrape_runs"]
     settings = db["settings"]
 
+    force = "--force" in sys.argv
+
     # check if enough time has passed since last run
-    config = settings.find_one({"_id": "global"}) or {}
-    interval_hours = config.get("scrape_interval_hours", 6)
-    last_run = runs.find_one({"source": "bestdesignsonx"}, sort=[("ran_at", -1)])
-    if last_run:
-        ran_at = last_run["ran_at"].replace(tzinfo=timezone.utc) if last_run["ran_at"].tzinfo is None else last_run["ran_at"]
-        elapsed = (datetime.now(timezone.utc) - ran_at).total_seconds() / 3600
-        if elapsed < interval_hours:
-            print(f"Skipping — last ran {elapsed:.1f}h ago, interval is {interval_hours}h")
-            client.close()
-            return
+    if not force:
+        config = settings.find_one({"_id": "global"}) or {}
+        interval_hours = config.get("scrape_interval_hours", 6)
+        last_run = runs.find_one({"source": "bestdesignsonx"}, sort=[("ran_at", -1)])
+        if last_run:
+            ran_at = last_run["ran_at"].replace(tzinfo=timezone.utc) if last_run["ran_at"].tzinfo is None else last_run["ran_at"]
+            elapsed = (datetime.now(timezone.utc) - ran_at).total_seconds() / 3600
+            if elapsed < interval_hours:
+                print(f"Skipping — last ran {elapsed:.1f}h ago, interval is {interval_hours}h")
+                client.close()
+                return
 
     # find the highest source_id already in the database
     latest = posts.find_one({"source": "bestdesignsonx"}, sort=[("source_id", -1)])
