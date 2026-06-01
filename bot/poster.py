@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from datetime import datetime, timezone
 
 load_dotenv("../.env")
+load_dotenv("../.env.local")
 
 def get_twitter_client():
     return tweepy.Client(
