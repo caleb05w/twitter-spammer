@@ -63,7 +63,8 @@ def run():
     interval_hours = config.get("scrape_interval_hours", 6)
     last_run = runs.find_one({"source": "bestdesignsonx"}, sort=[("ran_at", -1)])
     if last_run:
-        elapsed = (datetime.now(timezone.utc) - last_run["ran_at"]).total_seconds() / 3600
+        ran_at = last_run["ran_at"].replace(tzinfo=timezone.utc) if last_run["ran_at"].tzinfo is None else last_run["ran_at"]
+        elapsed = (datetime.now(timezone.utc) - ran_at).total_seconds() / 3600
         if elapsed < interval_hours:
             print(f"Skipping — last ran {elapsed:.1f}h ago, interval is {interval_hours}h")
             client.close()
