@@ -78,6 +78,17 @@ def run(limit=1, post_id=None):
     db = mongo["design-scrape"]
     posts = db["posts"]
 
+    # if no specific post_id, check if it's the right time to post
+    if not post_id:
+        config = db["settings"].find_one({"_id": "global"}) or {}
+        post_hour_pst = config.get("post_hour_pst", 9)
+        post_hour_utc = (post_hour_pst + 8) % 24  # PST = UTC-8
+        current_hour_utc = datetime.now(timezone.utc).hour
+        if current_hour_utc != post_hour_utc:
+            print(f"Skipping — current UTC hour is {current_hour_utc}, post hour is {post_hour_utc}")
+            mongo.close()
+            return
+
     if post_id:
         queue = [posts.find_one({"_id": ObjectId(post_id)})]
         queue = [p for p in queue if p]

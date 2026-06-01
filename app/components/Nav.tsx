@@ -13,6 +13,7 @@ export default function Nav() {
         {[
           { label: "Queue", href: "/" },
           { label: "Analytics", href: "/analytics" },
+          { label: "Settings", href: "/settings" },
         ].map(({ label, href }) => (
           <Link
             key={href}
