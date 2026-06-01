@@ -15,14 +15,16 @@ HEADERS = {
 }
 
 
-def fetch_posts(limit=120):
-    response = requests.get(SUPABASE_URL, headers=HEADERS, params={
+def fetch_posts(after_id=None):
+    params = {
         "select": "*",
         "status": "eq.Published",
-        "order": "created_at.desc",
-        "offset": 0,
-        "limit": limit,
-    })
+        "order": "id.desc",
+        "limit": 50,
+    }
+    if after_id:
+        params["id"] = f"gt.{after_id}"
+    response = requests.get(SUPABASE_URL, headers=HEADERS, params=params)
     response.raise_for_status()
     return response.json()
 
@@ -55,15 +57,17 @@ def run():
     posts = db["posts"]
     runs = db["scrape_runs"]
 
-    raw = fetch_posts()
+    # find the highest source_id already in the database
+    latest = posts.find_one({"source": "bestdesignsonx"}, sort=[("source_id", -1)])
+    after_id = int(latest["source_id"]) if latest else None
+
+    raw = fetch_posts(after_id=after_id)
     new_count = 0
 
     for raw_post in raw:
         normalized = normalize(raw_post)
-        existing = posts.find_one({"source_id": normalized["source_id"]})
-        if not existing:
-            posts.insert_one(normalized)
-            new_count += 1
+        posts.insert_one(normalized)
+        new_count += 1
 
     runs.insert_one({
         "source": "bestdesignsonx",
