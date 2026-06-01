@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Nav from "./components/Nav";
+import ProxyImage from "./components/ProxyImage";
 
 type Post = {
   _id: string;
@@ -71,7 +72,7 @@ export default function Dashboard() {
               <div key={post._id} className="border border-neutral-200 rounded-lg overflow-hidden">
                 <div className="aspect-square bg-neutral-100 relative overflow-hidden">
                   {post.cover_url ? (
-                    <img
+                    <ProxyImage
                       src={post.cover_url}
                       alt={post.author_name}
                       className="w-full h-full object-cover"

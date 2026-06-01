@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
+import ProxyImage from "../components/ProxyImage";
 
 type Source = {
   _id: string;
@@ -110,7 +111,7 @@ export default function Analytics() {
               <div key={source._id} className="border border-neutral-200 rounded-lg p-5 flex items-center gap-6">
                 <div className="w-12 h-12 rounded overflow-hidden bg-neutral-100 shrink-0">
                   {source.lastPost.cover_url && (
-                    <img src={source.lastPost.cover_url} className="w-full h-full object-cover" alt="" />
+                    <ProxyImage src={source.lastPost.cover_url} className="w-full h-full object-cover" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -135,7 +136,7 @@ export default function Analytics() {
             {data?.recentPosts.map((post) => (
               <div key={post._id} className="aspect-square rounded overflow-hidden bg-neutral-100 relative group">
                 {post.cover_url && (
-                  <img src={post.cover_url} className="w-full h-full object-cover" alt="" />
+                  <ProxyImage src={post.cover_url} className="w-full h-full object-cover" />
                 )}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
                   <p className="text-[9px] text-white leading-tight">@{post.handle}</p>
@@ -154,7 +155,7 @@ export default function Analytics() {
                 <div key={post._id} className="border border-neutral-200 rounded-lg p-4 flex items-center gap-4">
                   <div className="w-10 h-10 rounded overflow-hidden bg-neutral-100 shrink-0">
                     {post.cover_url && (
-                      <img src={post.cover_url} className="w-full h-full object-cover" alt="" />
+                      <ProxyImage src={post.cover_url} className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">

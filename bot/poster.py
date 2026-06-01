@@ -33,11 +33,7 @@ def download_media(url):
     return response.content
 
 def format_caption(post):
-    return (
-        f"Design by @{post['handle']}\n\n"
-        f"{post['tweet_text'][:200]}\n\n"
-        f"→ {post['tweet_url']}"
-    )
+    return f"Design by @{post['handle']}"
 
 def post_to_x(post):
     client = get_twitter_client()
