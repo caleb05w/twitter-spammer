@@ -6,6 +6,7 @@ const DEFAULTS = {
   post_hours_x:         [540],   // 9:00 AM PST
   post_hours_threads:   [600],   // 10:00 AM PST
   post_hours_instagram: [660],   // 11:00 AM PST
+  auto_run:             false,
 };
 
 const VALID_INTERVALS = new Set([1, 2, 4, 6, 12, 24]);
@@ -26,6 +27,7 @@ const VALIDATORS: Record<string, (v: unknown) => boolean> = {
   post_hours_threads:    isTimeArray,
   post_hours_instagram:  isTimeArray,
   ig_access_token:       (v) => typeof v === "string",
+  auto_run:              (v) => typeof v === "boolean",
 };
 
 export async function GET() {

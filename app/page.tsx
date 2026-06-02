@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [sources, setSources] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [autoRun, setAutoRun] = useState(false);
 
   // Post tab state
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
@@ -43,6 +44,20 @@ export default function Dashboard() {
   const [threadsHandles, setThreadsHandles] = useState<Record<string, string>>({});
   const [selectedPlatforms, setSelectedPlatforms] = useState<Record<string, Platform[]>>({});
   const [platformStates, setPlatformStates] = useState<Record<string, Partial<Record<Platform, PlatformState>>>>({});
+
+  useEffect(() => {
+    fetch("/api/settings").then(r => r.json()).then(d => setAutoRun(!!d.auto_run)).catch(() => {});
+  }, []);
+
+  async function toggleAutoRun() {
+    const next = !autoRun;
+    setAutoRun(next);
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_run: next }),
+    });
+  }
 
   async function fetchPosts(status: string, source?: string) {
     setLoading(true);
@@ -189,23 +204,34 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {sources.length > 1 && (
-            <div className="flex gap-2 flex-wrap pb-2">
-              {["all", ...sources].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleSourceFilter(s)}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    sourceFilter === s
-                      ? "bg-black text-white border-black"
-                      : "border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-black"
-                  }`}
-                >
-                  {s === "all" ? "All" : s}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex items-center gap-4 pb-2">
+            {sources.length > 1 && (
+              <div className="flex gap-2 flex-wrap">
+                {["all", ...sources].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSourceFilter(s)}
+                    className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                      sourceFilter === s
+                        ? "bg-black text-white border-black"
+                        : "border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-black"
+                    }`}
+                  >
+                    {s === "all" ? "All" : s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <label className="flex items-center gap-1.5 cursor-pointer select-none ml-auto shrink-0">
+              <input
+                type="checkbox"
+                checked={autoRun}
+                onChange={toggleAutoRun}
+                className="w-3.5 h-3.5 accent-black"
+              />
+              <span className="text-xs text-neutral-500">Auto run</span>
+            </label>
+          </div>
         </div>
       </div>
 

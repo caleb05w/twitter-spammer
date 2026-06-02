@@ -99,6 +99,16 @@ def run(post_id=None):
     else:
         queue = list(posts.find({"status": "approved"}).sort("scraped_at", 1).limit(1))
 
+    if not queue and not post_id:
+        if config.get("auto_run", False):
+            import random
+            pending = list(posts.find({"status": "pending"}).limit(50))
+            if pending:
+                pick = random.choice(pending)
+                posts.update_one({"_id": pick["_id"]}, {"$set": {"status": "approved"}})
+                queue = [pick]
+                print(f"Auto-approved: @{pick['handle']}")
+
     if not queue:
         print("No posts to send.")
         mongo.close()
