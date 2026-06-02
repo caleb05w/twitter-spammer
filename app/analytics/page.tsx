@@ -3,6 +3,20 @@
 import { useEffect, useState } from "react";
 import Nav from "../components/Nav";
 import ProxyImage from "../components/ProxyImage";
+import SourceCard from "../components/SourceCard";
+import { timeAgo } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Source = {
   _id: string;
@@ -23,18 +37,20 @@ type RecentPost = {
   author_name: string;
   cover_url: string;
   tweet_text: string;
+  tweet_url: string;
   source: string;
   scraped_at: string;
   posted_at?: string;
   tweet_id?: string;
+  media_type: string;
   status: string;
 };
 
-type LastRun = {
+type ScrapeRun = {
+  _id: string;
   source: string;
   ran_at: string;
   new_posts: number;
-  total_fetched: number;
 };
 
 type Analytics = {
@@ -42,24 +58,12 @@ type Analytics = {
   statusCounts: Record<string, number>;
   recentPosts: RecentPost[];
   postedPosts: RecentPost[];
-  lastRun: LastRun | null;
+  recentRuns: ScrapeRun[];
 };
 
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  const hrs = Math.floor(mins / 60);
-  const days = Math.floor(hrs / 24);
-  if (days > 0) return `${days}d ago`;
-  if (hrs > 0) return `${hrs}h ago`;
-  if (mins > 0) return `${mins}m ago`;
-  return "just now";
-}
 
 export default function Analytics() {
   const [data, setData] = useState<Analytics | null>(null);
-  const [scraping, setScraping] = useState(false);
-  const [scrapeResult, setScrapeResult] = useState<string | null>(null);
 
   async function fetchAnalytics() {
     try {
@@ -75,25 +79,15 @@ export default function Analytics() {
     fetchAnalytics();
   }, []);
 
-  async function triggerScrape() {
-    setScraping(true);
-    setScrapeResult(null);
-    const res = await fetch("/api/scrape", { method: "POST" });
-    const json = await res.json();
-    setScrapeResult(json.ok ? json.output : `Error: ${json.error}`);
-    setScraping(false);
-    fetchAnalytics();
-  }
-
   const total = data ? Object.values(data.statusCounts).reduce((a, b) => a + b, 0) : 0;
 
   return (
-    <div className="min-h-screen bg-white text-black">
+    <div className="min-h-screen bg-background text-foreground">
       <Nav />
       <main className="px-8 py-8 max-w-6xl">
 
-        {/* Status counts */}
-        <div className="grid grid-cols-5 gap-4 mb-10">
+        {/* Stats */}
+        <div className="grid grid-cols-5 gap-3 mb-8">
           {[
             { label: "Total", value: total },
             { label: "Pending", value: data?.statusCounts.pending ?? 0 },
@@ -101,75 +95,103 @@ export default function Analytics() {
             { label: "Posted", value: data?.statusCounts.posted ?? 0 },
             { label: "Rejected", value: data?.statusCounts.rejected ?? 0 },
           ].map(({ label, value }) => (
-            <div key={label} className="border border-neutral-200 rounded-lg p-5">
-              <p className="text-[11px] text-neutral-400 uppercase tracking-widest mb-1">{label}</p>
-              <p className="text-3xl font-light">{value}</p>
-            </div>
+            <Card key={label} size="sm">
+              <CardHeader>
+                <CardDescription className="text-[11px] uppercase tracking-widest">{label}</CardDescription>
+                <CardTitle className="text-3xl font-light">{value}</CardTitle>
+              </CardHeader>
+            </Card>
           ))}
         </div>
 
-        {/* Sources */}
-        <div className="mb-10">
-          <h2 className="text-xs uppercase tracking-widest text-neutral-400 mb-4">Sources</h2>
-          <div className="space-y-3">
-            {data?.sources.map((source) => (
-              <div key={source._id} className="border border-neutral-200 rounded-lg p-5 flex items-center gap-6">
-                <div className="w-12 h-12 rounded overflow-hidden bg-neutral-100 shrink-0">
-                  {source.lastPost?.cover_url && (
-                    <ProxyImage src={source.lastPost.cover_url} className="w-full h-full object-cover" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{source._id}</p>
-                  <p className="text-[11px] text-neutral-400 truncate">
-                    {source.lastPost ? `Last: @${source.lastPost.handle} — ${source.lastPost.tweet_text?.slice(0, 60) ?? ""}` : "No posts yet"}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-medium">{source.total} posts</p>
-                  <p className="text-[11px] text-neutral-400">{timeAgo(source.lastScraped)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Tabs */}
+        <Tabs defaultValue="sources">
+          <TabsList variant="line" className="w-full justify-start mb-6">
+            <TabsTrigger value="sources">Sources</TabsTrigger>
+            <TabsTrigger value="recently-scraped">Recently Scraped</TabsTrigger>
+            <TabsTrigger value="posted">Posted</TabsTrigger>
+            <TabsTrigger value="runs">Runs</TabsTrigger>
+          </TabsList>
 
-        {/* Recent scrapes */}
-        <div className="mb-10">
-          <h2 className="text-xs uppercase tracking-widest text-neutral-400 mb-4">Recently Scraped</h2>
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-            {data?.recentPosts.map((post) => (
-              <div key={post._id} className="aspect-square rounded overflow-hidden bg-neutral-100 relative group">
-                {post.cover_url && (
-                  <ProxyImage src={post.cover_url} className="w-full h-full object-cover" />
-                )}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
-                  <p className="text-[9px] text-white leading-tight">@{post.handle}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          {/* Sources — horizontal scroll row */}
+          <TabsContent value="sources">
+            <div className="flex flex-row gap-3 overflow-x-auto pb-2">
+              {data?.sources.map((source) => (
+                <SourceCard key={source._id} source={source} onScraped={fetchAnalytics} />
+              ))}
+              {!data?.sources.length && (
+                <p className="text-sm text-muted-foreground">No sources yet.</p>
+              )}
+            </div>
+          </TabsContent>
 
-        {/* Posted posts */}
-        {data?.postedPosts && data.postedPosts.length > 0 && (
-          <div className="mb-10">
-            <h2 className="text-xs uppercase tracking-widest text-neutral-400 mb-4">Posted to X</h2>
+          {/* Recently scraped table */}
+          <TabsContent value="recently-scraped">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Handle</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Scraped</TableHead>
+                  <TableHead>Format</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data?.recentPosts.map((post) => (
+                  <TableRow key={post._id}>
+                    <TableCell>
+                      <div className="w-8 h-8 rounded overflow-hidden bg-muted shrink-0">
+                        {post.cover_url && (
+                          <ProxyImage src={post.cover_url} className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <a
+                        href={post.tweet_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline text-xs"
+                      >
+                        @{post.handle}
+                      </a>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{post.source}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{timeAgo(post.scraped_at)}</TableCell>
+                    <TableCell>
+                      {post.media_type ? (
+                        <Badge variant="secondary" className="capitalize text-[10px]">{post.media_type}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TabsContent>
+
+          {/* Posted */}
+          <TabsContent value="posted">
             <div className="space-y-2">
-              {data.postedPosts.map((post) => (
-                <div key={post._id} className="border border-neutral-200 rounded-lg p-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded overflow-hidden bg-neutral-100 shrink-0">
+              {data?.postedPosts.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nothing posted yet.</p>
+              )}
+              {data?.postedPosts.map((post) => (
+                <div key={post._id} className="flex items-center gap-4 border rounded-lg p-3">
+                  <div className="w-9 h-9 rounded overflow-hidden bg-muted shrink-0">
                     {post.cover_url && (
                       <ProxyImage src={post.cover_url} className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium">@{post.handle}</p>
-                    <p className="text-[11px] text-neutral-400 truncate">{post.tweet_text?.slice(0, 80)}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{post.tweet_text?.slice(0, 80)}</p>
                   </div>
-                  <div className="text-right shrink-0 flex items-center gap-3">
+                  <div className="shrink-0 flex items-center gap-3">
                     {post.posted_at && (
-                      <p className="text-[11px] text-neutral-400">{timeAgo(post.posted_at)}</p>
+                      <span className="text-[11px] text-muted-foreground">{timeAgo(post.posted_at)}</span>
                     )}
                     {post.tweet_id && (
                       <a
@@ -185,33 +207,39 @@ export default function Analytics() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          </TabsContent>
+          {/* Runs */}
+          <TabsContent value="runs">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Ran</TableHead>
+                  <TableHead className="text-right">New Posts</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data?.recentRuns.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-sm text-muted-foreground">No runs recorded yet.</TableCell>
+                  </TableRow>
+                )}
+                {data?.recentRuns.map((run) => (
+                  <TableRow key={run._id}>
+                    <TableCell className="text-xs font-medium">{run.source}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{timeAgo(run.ran_at)}</TableCell>
+                    <TableCell className="text-xs text-right">
+                      {run.new_posts > 0
+                        ? <Badge variant="secondary">+{run.new_posts}</Badge>
+                        : <span className="text-muted-foreground">0</span>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TabsContent>
 
-        {/* Scrape button */}
-        <div>
-          <button
-            onClick={triggerScrape}
-            disabled={scraping}
-            className="px-6 py-2.5 bg-black text-white text-sm rounded hover:bg-neutral-800 transition-colors disabled:opacity-40"
-          >
-            {scraping ? "Scraping..." : "Scrape Now"}
-          </button>
-          <div className="mt-3 space-y-1">
-            {data?.lastRun && (
-              <p className="text-sm text-neutral-400">
-                Last run: <span className="text-black">{timeAgo(data.lastRun.ran_at)}</span>
-                {" — "}
-                <span className="text-black">{data.lastRun.new_posts} new posts</span>
-                {" from "}
-                <span className="text-black">{data.lastRun.source}</span>
-              </p>
-            )}
-            {scrapeResult && (
-              <p className="text-sm text-neutral-500">{scrapeResult}</p>
-            )}
-          </div>
-        </div>
+        </Tabs>
 
       </main>
     </div>

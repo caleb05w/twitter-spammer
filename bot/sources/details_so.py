@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 
+SOURCE_NAME = "details.so"
+
 CATEGORIES = [
     "hero", "navigation", "footer", "features", "button",
     "scroll-animations", "preloader", "page-transition", "section-transition",

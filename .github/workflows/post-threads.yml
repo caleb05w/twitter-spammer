@@ -1,0 +1,27 @@
+name: Post to Threads
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # every hour — script checks post time setting internally
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pymongo requests python-dotenv
+
+      - name: Run poster
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+        run: python bot/poster_threads.py

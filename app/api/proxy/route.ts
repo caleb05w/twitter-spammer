@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-
-function isAllowed(url: string): boolean {
-  try {
-    const { hostname } = new URL(url);
-    return hostname.endsWith(".b-cdn.net") || hostname.endsWith(".details.so");
-  } catch {
-    return false;
-  }
-}
+import { isCdnUrl } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
   if (!url) return new NextResponse("Missing url", { status: 400 });
-  if (!isAllowed(url)) return new NextResponse("Forbidden", { status: 403 });
+  if (!isCdnUrl(url)) return new NextResponse("Forbidden", { status: 403 });
 
   const fetchHeaders: HeadersInit = { Referer: "https://www.details.so" };
   const range = req.headers.get("range");
@@ -22,7 +14,6 @@ export async function GET(req: NextRequest) {
   const contentType = res.headers.get("content-type") ?? "application/octet-stream";
   const contentRange = res.headers.get("content-range");
   const contentLength = res.headers.get("content-length");
-  const buffer = await res.arrayBuffer();
 
   const headers: Record<string, string> = {
     "Content-Type": contentType,
@@ -32,5 +23,5 @@ export async function GET(req: NextRequest) {
   if (contentRange) headers["Content-Range"] = contentRange;
   if (contentLength) headers["Content-Length"] = contentLength;
 
-  return new NextResponse(buffer, { status: res.status, headers });
+  return new NextResponse(res.body, { status: res.status, headers });
 }

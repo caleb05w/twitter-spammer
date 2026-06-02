@@ -2,14 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 
 export async function GET(req: NextRequest) {
-  const status = req.nextUrl.searchParams.get("status") || "pending";
-  const db = await getDb();
-  const posts = await db
-    .collection("posts")
-    .find({ status })
-    .sort({ scraped_at: -1 })
-    .limit(50)
-    .toArray();
+  const { searchParams } = req.nextUrl;
+  const status = searchParams.get("status") || "pending";
+  const source = searchParams.get("source");
 
-  return NextResponse.json(posts.map((p) => ({ ...p, _id: p._id.toString() })));
+  const db = await getDb();
+  const collection = db.collection("posts");
+
+  const query: Record<string, any> = { status };
+  if (source) query.source = source;
+
+  const [posts, sources] = await Promise.all([
+    collection.find(query).sort({ scraped_at: -1 }).limit(50).toArray(),
+    collection.distinct("source", { status }),
+  ]);
+
+  return NextResponse.json({
+    posts: posts.map((p) => ({ ...p, _id: p._id.toString() })),
+    sources: sources.filter(Boolean).sort(),
+  });
 }

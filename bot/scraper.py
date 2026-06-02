@@ -8,9 +8,9 @@ _dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_dir, "../.env"))
 load_dotenv(os.path.join(_dir, "../.env.local"))
 
-from sources import bestdesignsonx, details_so
+from sources import bestdesignsonx, details_so, craftwork
 
-SOURCES = [bestdesignsonx, details_so]
+SOURCES = [bestdesignsonx, details_so, craftwork]
 
 
 def run():
@@ -21,6 +21,10 @@ def run():
     settings = db["settings"]
 
     force = "--force" in sys.argv
+    source_filter = None
+    for arg in sys.argv:
+        if arg.startswith("--source="):
+            source_filter = arg.split("=", 1)[1]
 
     if not force:
         config = settings.find_one({"_id": "global"}) or {}
@@ -34,12 +38,15 @@ def run():
                 client.close()
                 return
 
+    active_sources = [s for s in SOURCES if not source_filter or s.__name__.split(".")[-1] == source_filter]
+
     total_new = 0
-    for source in SOURCES:
+    for source in active_sources:
         try:
             new_count = source.scrape(posts)
+            source_name = getattr(source, "SOURCE_NAME", source.__name__.split(".")[-1])
             runs.insert_one({
-                "source": source.__name__.split(".")[-1],
+                "source": source_name,
                 "ran_at": datetime.now(timezone.utc),
                 "new_posts": new_count,
             })

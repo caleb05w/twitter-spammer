@@ -12,6 +12,8 @@ _dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_dir, "../.env"))
 load_dotenv(os.path.join(_dir, "../.env.local"))
 
+from utils import download_media
+
 
 def get_twitter_client():
     return tweepy.Client(
@@ -32,24 +34,11 @@ def get_twitter_v1():
     return tweepy.API(auth)
 
 
-def download_media(url):
-    headers = {}
-    if "b-cdn.net" in url or "details.so" in url:
-        headers["Referer"] = "https://www.details.so"
-    response = requests.get(url, headers=headers, timeout=30)
-    response.raise_for_status()
-    return response.content
-
-
-def format_caption(post):
-    return f"Design by @{post['handle']}"
-
-
 def post_to_x(post):
     client = get_twitter_client()
     api_v1 = get_twitter_v1()
 
-    caption = format_caption(post)
+    caption = f"Design by @{post['handle']}"
     is_video = post.get("media_type") == "video"
 
     if is_video:
@@ -94,10 +83,12 @@ def run(post_id=None):
     if not post_id:
         config = db["settings"].find_one({"_id": "global"}) or {}
         post_hour_pst = config.get("post_hour_pst", 9)
-        post_hour_utc = (post_hour_pst + 8) % 24
+        frequency = config.get("post_frequency_x", 1)
+        interval = 24 // frequency
+        post_hours_utc = [(post_hour_pst + 8 + i * interval) % 24 for i in range(frequency)]
         current_hour_utc = datetime.now(timezone.utc).hour
-        if current_hour_utc != post_hour_utc:
-            print(f"Skipping — current UTC hour is {current_hour_utc}, post hour is {post_hour_utc}")
+        if current_hour_utc not in post_hours_utc:
+            print(f"Skipping — current UTC hour is {current_hour_utc}, post hours are {post_hours_utc}")
             mongo.close()
             return
 
