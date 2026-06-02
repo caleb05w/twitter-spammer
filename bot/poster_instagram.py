@@ -78,13 +78,12 @@ def run(post_id=None):
 
     if not post_id:
         config = db["settings"].find_one({"_id": "global"}) or {}
-        post_hour_pst = config.get("post_hour_pst_instagram", 11)
-        frequency = config.get("post_frequency_instagram", 1)
-        interval = 24 // frequency
-        post_hours_utc = [(post_hour_pst + 8 + i * interval) % 24 for i in range(frequency)]
-        current_hour_utc = datetime.now(timezone.utc).hour
-        if current_hour_utc not in post_hours_utc:
-            print(f"Skipping — current UTC hour is {current_hour_utc}, post hours are {post_hours_utc}")
+        post_times_pst = config.get("post_hours_instagram", [660])  # minutes from midnight PST
+        post_times_utc = [(m + 8 * 60) % (24 * 60) for m in post_times_pst]
+        now = datetime.now(timezone.utc)
+        current_minutes = now.hour * 60 + now.minute
+        if current_minutes not in post_times_utc:
+            print(f"Skipping — current UTC minutes is {current_minutes}, post times are {post_times_utc}")
             mongo.close()
             return
 

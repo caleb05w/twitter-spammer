@@ -44,9 +44,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     update.status = body.status;
   }
-  if (body.tweet_text !== undefined) {
-    update.tweet_text = String(body.tweet_text);
-  }
+  if (body.tweet_text !== undefined) update.tweet_text = String(body.tweet_text);
+  if (body.ig_handle !== undefined) update.ig_handle = String(body.ig_handle).replace(/^@/, "");
+  if (body.threads_handle !== undefined) update.threads_handle = String(body.threads_handle).replace(/^@/, "");
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }

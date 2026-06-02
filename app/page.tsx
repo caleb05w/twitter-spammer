@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Nav from "./components/Nav";
 import MediaPreview from "./components/MediaPreview";
-import { buildCaption } from "@/lib/social";
 
 type Post = {
   _id: string;
@@ -15,6 +14,8 @@ type Post = {
   media_url?: string;
   media_type: string;
   source: string;
+  ig_handle?: string;
+  threads_handle?: string;
 };
 
 type Tab = "queue" | "post";
@@ -37,7 +38,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   // Post tab state
-  const [captions, setCaptions] = useState<Record<string, string>>({});
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({});
+  const [igHandles, setIgHandles] = useState<Record<string, string>>({});
+  const [threadsHandles, setThreadsHandles] = useState<Record<string, string>>({});
   const [selectedPlatforms, setSelectedPlatforms] = useState<Record<string, Platform[]>>({});
   const [platformStates, setPlatformStates] = useState<Record<string, Partial<Record<Platform, PlatformState>>>>({});
 
@@ -79,8 +82,29 @@ export default function Dashboard() {
   }
 
   // Post tab actions
-  function getCaption(post: Post) {
-    return post._id in captions ? captions[post._id] : buildCaption(post);
+  function getDescription(post: Post) {
+    return post._id in descriptions ? descriptions[post._id] : (post.tweet_text ?? "");
+  }
+
+  function getHandle(post: Post, platform: Platform): string {
+    if (platform === "instagram") return igHandles[post._id] ?? post.ig_handle ?? post.handle;
+    if (platform === "threads") return threadsHandles[post._id] ?? post.threads_handle ?? post.handle;
+    return post.handle;
+  }
+
+  function buildPlatformCaption(post: Post, platform: Platform): string {
+    const desc = getDescription(post);
+    const handle = getHandle(post, platform);
+    return desc ? `${desc}\n\nby @${handle}` : `Design by @${handle}`;
+  }
+
+  async function saveHandle(post: Post, platform: "instagram" | "threads", value: string) {
+    const field = platform === "instagram" ? "ig_handle" : "threads_handle";
+    await fetch(`/api/posts/${post._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
   }
 
   function getPostPlatforms(post: Post): Platform[] {
@@ -109,7 +133,6 @@ export default function Dashboard() {
   }
 
   async function handlePost(post: Post) {
-    const caption = getCaption(post);
     const platforms = getPostPlatforms(post);
     if (platforms.length === 0) return;
 
@@ -126,7 +149,7 @@ export default function Dashboard() {
         const res = await fetch(`/api/posts/${post._id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ platform, caption }),
+          body: JSON.stringify({ platform, caption: buildPlatformCaption(post, platform) }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Failed");
@@ -258,12 +281,48 @@ export default function Dashboard() {
                     <>
                       <textarea
                         className="w-full text-[11px] text-neutral-700 border border-neutral-200 rounded px-2 py-1.5 resize-none focus:outline-none focus:border-neutral-400 leading-relaxed"
-                        rows={4}
-                        value={getCaption(post)}
+                        rows={3}
+                        placeholder="Description…"
+                        value={getDescription(post)}
                         onChange={(e) =>
-                          setCaptions((prev) => ({ ...prev, [post._id]: e.target.value }))
+                          setDescriptions((prev) => ({ ...prev, [post._id]: e.target.value }))
                         }
                       />
+                      <div className="space-y-1">
+                        {(["twitter", "threads", "instagram"] as const)
+                          .filter((p) => getPostPlatforms(post).includes(p))
+                          .map((platform) => {
+                            const isX = platform === "twitter";
+                            const value = isX
+                              ? post.handle
+                              : platform === "instagram"
+                              ? (igHandles[post._id] ?? post.ig_handle ?? post.handle)
+                              : (threadsHandles[post._id] ?? post.threads_handle ?? post.handle);
+                            const label = isX ? "X" : platform === "instagram" ? "IG" : "Threads";
+                            return (
+                              <div key={platform} className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-neutral-400 w-10 shrink-0">{label}</span>
+                                <span className="text-[11px] text-neutral-400">@</span>
+                                <input
+                                  type="text"
+                                  readOnly={isX}
+                                  value={value}
+                                  onChange={(e) => {
+                                    const v = e.target.value.replace(/^@/, "");
+                                    if (platform === "instagram") setIgHandles((prev) => ({ ...prev, [post._id]: v }));
+                                    else if (platform === "threads") setThreadsHandles((prev) => ({ ...prev, [post._id]: v }));
+                                  }}
+                                  onBlur={(e) => {
+                                    if (!isX) saveHandle(post, platform, e.target.value.replace(/^@/, ""));
+                                  }}
+                                  className={`flex-1 text-[11px] border rounded px-1.5 py-0.5 focus:outline-none focus:border-neutral-400 ${
+                                    isX ? "bg-neutral-50 text-neutral-400 border-neutral-100" : "border-neutral-200"
+                                  }`}
+                                />
+                              </div>
+                            );
+                          })}
+                      </div>
                       <div className="flex items-center gap-1.5 mt-auto flex-wrap">
                         {PLATFORMS.map(({ id, label }) => {
                           const active = getPostPlatforms(post).includes(id);

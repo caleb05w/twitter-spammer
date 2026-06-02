@@ -2,7 +2,7 @@ name: Post to Instagram
 
 on:
   schedule:
-    - cron: '0 * * * *'  # every hour — script checks post time setting internally
+    - cron: '0,30 * * * *'  # every 30 min — script checks post time setting internally
   workflow_dispatch:
 
 jobs:

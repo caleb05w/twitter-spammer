@@ -5,58 +5,125 @@ import Nav from "../components/Nav";
 
 type Settings = {
   scrape_interval_hours: number;
-  post_hour_pst: number;
-  post_hour_pst_threads: number;
-  post_hour_pst_instagram: number;
-  post_frequency_x: number;
-  post_frequency_threads: number;
-  post_frequency_instagram: number;
+  post_hours_x: number[];
+  post_hours_threads: number[];
+  post_hours_instagram: number[];
 };
 
 const SCRAPE_OPTIONS = [1, 2, 4, 6, 12, 24];
-const FREQUENCY_OPTIONS = [1, 2, 3, 4];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-function formatHour(h: number) {
-  const suffix = h >= 12 ? "PM" : "AM";
-  const display = h % 12 === 0 ? 12 : h % 12;
-  return `${display}:00 ${suffix}`;
-}
-
-function postHours(startHour: number, frequency: number): number[] {
-  const interval = Math.floor(24 / frequency);
-  return Array.from({ length: frequency }, (_, i) => (startHour + i * interval) % 24);
-}
 
 const PLATFORM_SCHEDULE = [
-  { label: "X",         hourKey: "post_hour_pst" as const,          freqKey: "post_frequency_x" as const },
-  { label: "Threads",   hourKey: "post_hour_pst_threads" as const,   freqKey: "post_frequency_threads" as const },
-  { label: "Instagram", hourKey: "post_hour_pst_instagram" as const, freqKey: "post_frequency_instagram" as const },
+  { label: "X",         key: "post_hours_x" as const },
+  { label: "Threads",   key: "post_hours_threads" as const },
+  { label: "Instagram", key: "post_hours_instagram" as const },
 ];
 
-function HourSelect({ value, onChange }: { value: number; onChange: (h: number) => void }) {
+function formatTime(m: number) {
+  const h = Math.floor(m / 60);
+  const mins = m % 60;
+  const suffix = h >= 12 ? "PM" : "AM";
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display}:${mins.toString().padStart(2, "0")} ${suffix}`;
+}
+
+// Parses "9", "9:30", "9:30am", "9:30 PM", "21:30" → minutes from midnight.
+// Rounds to nearest 30. Returns null if unparseable.
+function parseTime(raw: string): number | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  const match = s.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const mins = parseInt(match[2] ?? "0", 10);
+  const period = match[3];
+  if (h > 23 || mins > 59) return null;
+  if (period === "am" && h === 12) h = 0;
+  if (period === "pm" && h !== 12) h += 12;
+  const total = h * 60 + mins;
+  // Round to nearest 30
+  return Math.round(total / 30) * 30 % (24 * 60);
+}
+
+function TimeInput({ value, onChange }: { value: number; onChange: (m: number) => void }) {
+  const [text, setText] = useState(formatTime(value));
+  const [invalid, setInvalid] = useState(false);
+
+  function handleBlur() {
+    const parsed = parseTime(text);
+    if (parsed !== null) {
+      setInvalid(false);
+      setText(formatTime(parsed));
+      onChange(parsed);
+    } else {
+      setInvalid(true);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  }
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="border border-neutral-200 rounded px-3 py-2 text-sm w-32 bg-white"
-    >
-      {HOURS.map((h) => (
-        <option key={h} value={h}>{formatHour(h)}</option>
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => { setText(e.target.value); setInvalid(false); }}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder="9:00 AM"
+      className={`w-28 border rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-neutral-400 ${
+        invalid ? "border-red-400 text-red-500" : "border-neutral-200"
+      }`}
+    />
+  );
+}
+
+function TimeRows({ times, onChange }: { times: number[]; onChange: (t: number[]) => void }) {
+  function setTime(i: number, m: number) {
+    const next = [...times];
+    next[i] = m;
+    onChange(next);
+  }
+  function remove(i: number) {
+    onChange(times.filter((_, idx) => idx !== i));
+  }
+  function add() {
+    if (times.length >= 6) return;
+    onChange([...times, 720]);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {times.map((m, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <TimeInput value={m} onChange={(v) => setTime(i, v)} />
+          {times.length > 1 && (
+            <button
+              onClick={() => remove(i)}
+              className="text-neutral-300 hover:text-neutral-600 text-sm leading-none"
+            >
+              ×
+            </button>
+          )}
+        </div>
       ))}
-    </select>
+      {times.length < 6 && (
+        <button
+          onClick={add}
+          className="text-[11px] text-neutral-400 hover:text-black transition-colors"
+        >
+          + Add time
+        </button>
+      )}
+    </div>
   );
 }
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     scrape_interval_hours: 6,
-    post_hour_pst: 9,
-    post_hour_pst_threads: 10,
-    post_hour_pst_instagram: 11,
-    post_frequency_x: 1,
-    post_frequency_threads: 1,
-    post_frequency_instagram: 1,
+    post_hours_x:         [540],
+    post_hours_threads:   [600],
+    post_hours_instagram: [660],
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -67,12 +134,9 @@ export default function SettingsPage() {
       .then((data) => {
         setSettings({
           scrape_interval_hours: data.scrape_interval_hours,
-          post_hour_pst: data.post_hour_pst,
-          post_hour_pst_threads: data.post_hour_pst_threads,
-          post_hour_pst_instagram: data.post_hour_pst_instagram,
-          post_frequency_x: data.post_frequency_x,
-          post_frequency_threads: data.post_frequency_threads,
-          post_frequency_instagram: data.post_frequency_instagram,
+          post_hours_x:         data.post_hours_x,
+          post_hours_threads:   data.post_hours_threads,
+          post_hours_instagram: data.post_hours_instagram,
         });
         setLoading(false);
       })
@@ -110,7 +174,6 @@ export default function SettingsPage() {
 
         <div className="space-y-8">
 
-          {/* Scrape frequency */}
           <div>
             <label className="block text-sm font-medium mb-2">Scrape Frequency</label>
             <p className="text-[11px] text-neutral-400 mb-3">How often to check for new posts from sources.</p>
@@ -131,46 +194,20 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Post schedule per platform */}
           <div>
             <label className="block text-sm font-medium mb-2">
-              Post Schedule <span className="text-neutral-400 font-normal">(PST)</span>
+              Post Times <span className="text-neutral-400 font-normal">(PST)</span>
             </label>
             <p className="text-[11px] text-neutral-400 mb-4">
-              First post time and how many times per day. Posts are distributed evenly across 24h.
+              One approved post is sent at each scheduled time. Up to 4 per platform.
             </p>
-            <div className="space-y-4">
-              {PLATFORM_SCHEDULE.map(({ label, hourKey, freqKey }) => {
-                const hours = postHours(settings[hourKey], settings[freqKey]);
-                return (
-                  <div key={label}>
-                    <p className="text-xs font-medium text-neutral-600 mb-2">{label}</p>
-                    <div className="flex items-center gap-3">
-                      <HourSelect value={settings[hourKey]} onChange={(h) => set(hourKey, h)} />
-                      <div className="flex gap-1">
-                        {FREQUENCY_OPTIONS.map((f) => (
-                          <button
-                            key={f}
-                            onClick={() => set(freqKey, f)}
-                            className={`w-8 h-8 text-xs rounded border transition-colors ${
-                              settings[freqKey] === f
-                                ? "bg-black text-white border-black"
-                                : "border-neutral-200 hover:border-neutral-400"
-                            }`}
-                          >
-                            {f}×
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {settings[freqKey] > 1 && (
-                      <p className="text-[10px] text-neutral-400 mt-1.5">
-                        Posts at {hours.map(formatHour).join(", ")}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="space-y-5">
+              {PLATFORM_SCHEDULE.map(({ label, key }) => (
+                <div key={key} className="flex gap-6">
+                  <span className="text-xs font-medium text-neutral-600 w-16 pt-2 shrink-0">{label}</span>
+                  <TimeRows times={settings[key]} onChange={(t) => set(key, t)} />
+                </div>
+              ))}
             </div>
           </div>
 

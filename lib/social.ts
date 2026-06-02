@@ -37,12 +37,12 @@ export async function waitForContainer(
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const res = await fetch(`${baseUrl}/${containerId}?fields=${statusField},status,error_message&access_token=${token}`);
+    const res = await fetch(`${baseUrl}/${containerId}?fields=${statusField}&access_token=${token}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error.message);
     const status = json[statusField];
     if (status === "FINISHED") return;
-    if (status === "ERROR") throw new Error(`Container processing failed: ${json.error_message ?? json.status}`);
+    if (status === "ERROR") throw new Error(`Container processing failed`);
     await new Promise((r) => setTimeout(r, 4000));
   }
   throw new Error("Timed out waiting for media container");
