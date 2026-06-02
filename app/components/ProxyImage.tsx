@@ -1,5 +1,7 @@
 "use client";
 
+import { isCdnUrl } from "@/lib/utils";
+
 type Props = {
   src: string;
   alt?: string;
@@ -7,13 +9,7 @@ type Props = {
 };
 
 function proxied(url: string) {
-  try {
-    const { hostname } = new URL(url);
-    if (hostname.endsWith(".b-cdn.net") || hostname.endsWith(".details.so")) {
-      return `/api/proxy?url=${encodeURIComponent(url)}`;
-    }
-  } catch {}
-  return url;
+  return isCdnUrl(url) ? `/api/proxy?url=${encodeURIComponent(url)}` : url;
 }
 
 function isVideo(url: string) {
