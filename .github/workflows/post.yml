@@ -26,4 +26,5 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          FORCE_POST: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: python bot/poster.py

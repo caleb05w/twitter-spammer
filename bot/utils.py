@@ -61,7 +61,8 @@ def run_poster(platform_key, default_minutes, post_fn, result_field, post_id=Non
     posts = db["posts"]
     config = {}
 
-    if not post_id:
+    force = bool(os.getenv("FORCE_POST"))
+    if not post_id and not force:
         config = db["settings"].find_one({"_id": "global"}) or {}
         post_times_utc = _pt_to_utc_minutes(config.get(platform_key, [default_minutes]))
         now = datetime.now(timezone.utc)
