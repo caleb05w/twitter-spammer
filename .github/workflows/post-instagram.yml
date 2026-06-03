@@ -1,9 +1,7 @@
 name: Post to Instagram
 
 on:
-  schedule:
-    - cron: '0,30 * * * *'  # every 30 min — script checks post time setting internally
-  workflow_dispatch:
+  workflow_dispatch:  # manual force-post only; scheduled posting handled by Vercel Cron
 
 jobs:
   post:
