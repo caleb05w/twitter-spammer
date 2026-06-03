@@ -42,7 +42,7 @@ def _pt_to_utc_minutes(pt_minutes):
     return result
 
 
-def _in_window(current, targets, window=2):
+def _in_window(current, targets, window=28):
     """True if current UTC minutes falls within `window` minutes after any target."""
     return any((current - t) % 1440 <= window for t in targets)
 

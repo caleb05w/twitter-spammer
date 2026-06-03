@@ -38,7 +38,7 @@ Never use relative paths like `load_dotenv("../.env")` — the working directory
 
 All three platform posters (`poster.py`, `poster_threads.py`, `poster_instagram.py`) delegate their scheduling and dispatch logic to `run_poster()` in `bot/utils.py`. This function handles:
 - DST-correct PT→UTC time conversion via `zoneinfo.ZoneInfo("America/Los_Angeles")`
-- A ±2-minute schedule window (GitHub Actions does not fire at exactly the cron minute)
+- A 28-minute schedule window (GitHub Actions fires 5–25 min late; window < 30 min prevents double-posting)
 - The approve queue, auto_run fallback, and DB status update
 
 When adding a new platform poster, call `run_poster(platform_key, default_minutes, post_fn, result_field, post_id)` instead of duplicating the logic.
