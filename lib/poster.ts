@@ -4,6 +4,11 @@ import { getDb } from "./mongodb";
 import { buildCaption, mediaUrl, downloadMedia } from "./social";
 import type { Post } from "./types";
 
+// Temporary kill switch for X/Twitter posting. Set back to false to re-enable.
+// Gates both the scheduled cron (app/api/cron/post-x) and the manual "Post now"
+// path (app/api/posts/[id]) — both post to X through postById().
+export const X_POSTING_DISABLED = true;
+
 function getClient() {
   return new TwitterApi({
     appKey: process.env.X_API_KEY!,
@@ -22,6 +27,10 @@ async function uploadMedia(client: TwitterApi, post: Post): Promise<string | und
 }
 
 export async function postById(postId: string, caption?: string): Promise<string> {
+  if (X_POSTING_DISABLED) {
+    throw new Error("X/Twitter posting is temporarily disabled");
+  }
+
   const db = await getDb();
   const post = await db.collection<Post>("posts").findOne({ _id: new ObjectId(postId) });
   if (!post) throw new Error(`Post not found: ${postId}`);

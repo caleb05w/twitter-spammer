@@ -23,11 +23,14 @@ type Platform = "twitter" | "instagram" | "threads";
 type PlatformStatus = "idle" | "posting" | "done" | "error";
 type PlatformState = { status: PlatformStatus; error?: string };
 
-const PLATFORMS: { id: Platform; label: string }[] = [
-  { id: "twitter", label: "X" },
+// X/Twitter posting is temporarily disabled — keep in sync with X_POSTING_DISABLED in lib/poster.ts.
+const PLATFORMS: { id: Platform; label: string; disabled?: boolean }[] = [
+  { id: "twitter", label: "X", disabled: true },
   { id: "threads", label: "Threads" },
   { id: "instagram", label: "IG" },
 ];
+
+const DEFAULT_PLATFORMS: Platform[] = PLATFORMS.filter((p) => !p.disabled).map((p) => p.id);
 
 
 export default function Dashboard() {
@@ -123,12 +126,13 @@ export default function Dashboard() {
   }
 
   function getPostPlatforms(post: Post): Platform[] {
-    return selectedPlatforms[post._id] ?? ["twitter"];
+    return selectedPlatforms[post._id] ?? DEFAULT_PLATFORMS;
   }
 
   function togglePlatform(postId: string, platform: Platform) {
+    if (PLATFORMS.find((p) => p.id === platform)?.disabled) return;
     setSelectedPlatforms((prev) => {
-      const current = prev[postId] ?? ["twitter"];
+      const current = prev[postId] ?? DEFAULT_PLATFORMS;
       const next = current.includes(platform)
         ? current.filter((p) => p !== platform)
         : [...current, platform];
@@ -350,15 +354,16 @@ export default function Dashboard() {
                           })}
                       </div>
                       <div className="flex items-center gap-1.5 mt-auto flex-wrap">
-                        {PLATFORMS.map(({ id, label }) => {
+                        {PLATFORMS.map(({ id, label, disabled }) => {
                           const active = getPostPlatforms(post).includes(id);
                           const { status, error } = getPlatformState(post._id, id);
                           return (
                             <div key={id} className="flex flex-col items-center gap-0.5">
                               <button
                                 onClick={() => togglePlatform(post._id, id)}
-                                disabled={status === "posting"}
-                                className={`px-2.5 py-1 text-[11px] rounded border transition-colors disabled:opacity-40 ${
+                                disabled={disabled || status === "posting"}
+                                title={disabled ? "X posting is temporarily disabled" : undefined}
+                                className={`px-2.5 py-1 text-[11px] rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${disabled ? "line-through " : ""}${
                                   status === "done"
                                     ? "bg-green-500 text-white border-green-500"
                                     : status === "error"
