@@ -21,7 +21,10 @@ async function createContainer(post: Post, caption?: string): Promise<string> {
 
   const res = await fetch(`${GRAPH_URL}/${USER_ID}/media`, { method: "POST", body: params });
   const json = await res.json();
-  if (!res.ok || json.error) throw new Error(json.error?.message ?? "Failed to create IG container");
+  if (!res.ok || json.error) {
+    const e = json.error;
+    throw new Error(e ? `IG API error (code ${e.code}/${e.error_subcode ?? "–"}): ${e.message}` : `Failed to create IG container (HTTP ${res.status})`);
+  }
   return json.id;
 }
 
@@ -29,7 +32,10 @@ async function publishContainer(containerId: string): Promise<string> {
   const params = new URLSearchParams({ creation_id: containerId, access_token: TOKEN });
   const res = await fetch(`${GRAPH_URL}/${USER_ID}/media_publish`, { method: "POST", body: params });
   const json = await res.json();
-  if (!res.ok || json.error) throw new Error(json.error?.message ?? "Failed to publish IG post");
+  if (!res.ok || json.error) {
+    const e = json.error;
+    throw new Error(e ? `IG API error (code ${e.code}/${e.error_subcode ?? "–"}): ${e.message}` : `Failed to publish IG post (HTTP ${res.status})`);
+  }
   return json.id;
 }
 
