@@ -10,11 +10,13 @@ export type Post = {
   media_url?: string;
   media_type?: string;
   source: string;
-  status: "pending" | "approved" | "rejected" | "posted";
+  status: "pending" | "approved" | "rejected" | "posted" | "failed";
   scraped_at: Date;
   ig_handle?: string;
   threads_handle?: string;
   posted_at?: Date;
+  failed_at?: Date;
+  last_error?: string;
   tweet_id?: string;
   ig_media_id?: string;
   threads_media_id?: string;
