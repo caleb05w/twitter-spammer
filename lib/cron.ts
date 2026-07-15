@@ -29,6 +29,17 @@ const MAX_TRIES_PER_RUN = 3;
 // on and nothing is approved — a random pending post promoted to approved.
 // Posts marked "failed" drop out of both queries, so a retired post is never
 // handed back here again.
+// Uniform-random pending post matching `filter`, or null if none match. Uses
+// $sample so selection is drawn across ALL matches — not the old oldest-50 slice,
+// which the craftwork bulk-import saturated so newer sources never surfaced.
+async function samplePending(db: Db, filter: Record<string, unknown>): Promise<Post | null> {
+  const [pick] = await db
+    .collection<Post>("posts")
+    .aggregate<Post>([{ $match: { ...filter, status: "pending" } }, { $sample: { size: 1 } }])
+    .toArray();
+  return pick ?? null;
+}
+
 async function nextCandidate(db: Db, autoRun: boolean): Promise<Post | null> {
   const approved = await db
     .collection<Post>("posts")
@@ -36,9 +47,17 @@ async function nextCandidate(db: Db, autoRun: boolean): Promise<Post | null> {
   if (approved) return approved;
   if (!autoRun) return null;
 
-  const pending = await db.collection<Post>("posts").find({ status: "pending" }).limit(50).toArray();
-  if (pending.length === 0) return null;
-  const pick = pending[Math.floor(Math.random() * pending.length)];
+  // 80/20 mix: ~80% of runs post bestdesignsonx, ~20% post a website source
+  // (craftwork/details.so/awwwards). Whichever side is chosen, fall back to the
+  // other if it's empty so a drained side never wastes the posting window.
+  // Previously the picker sampled the 50 oldest pending rows — which the ~2k-row
+  // craftwork backlog dominates — so bestdesignsonx never got posted.
+  const preferBest = Math.random() < 0.8;
+  const primary = preferBest ? { source: "bestdesignsonx" } : { source: { $ne: "bestdesignsonx" } };
+  const fallback = preferBest ? { source: { $ne: "bestdesignsonx" } } : { source: "bestdesignsonx" };
+  const pick = (await samplePending(db, primary)) ?? (await samplePending(db, fallback));
+  if (!pick) return null;
+
   await db.collection("posts").updateOne({ _id: pick._id }, { $set: { status: "approved" } });
   return pick;
 }
