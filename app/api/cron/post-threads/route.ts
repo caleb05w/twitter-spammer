@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   try {
     const result = await runCronPost("post_hours_threads", 600, postToThreads);
     console.log("[cron/post-threads]", result);
-    return NextResponse.json(result);
+    // Surface a fully-failed run as a 5xx so Vercel's cron monitoring flags it.
+    // Returning 200 here is why a month of dead posting went unnoticed.
+    return NextResponse.json(result, { status: result.failed ? 500 : 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[cron/post-threads] Error:", msg);

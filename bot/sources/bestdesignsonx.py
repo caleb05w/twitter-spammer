@@ -2,6 +2,8 @@ import os
 import requests
 from datetime import datetime, timezone
 
+from ._cursor import high_water_mark, upsert
+
 SUPABASE_URL = os.getenv(
     "BESTDESIGNSONX_SUPABASE_URL",
     "https://tuzpqmdnxvlzwqthgseg.supabase.co/rest/v1/bestdesignsonx",
@@ -17,33 +19,64 @@ HEADERS = {
 }
 
 
+PAGE_SIZE = 200
+
+
 def fetch_posts(after_id=None):
-    params = {
-        "select": "*",
-        "status": "eq.Published",
-        "order": "id.desc",
-        "limit": 50,
-    }
-    if after_id:
-        params["id"] = f"gt.{after_id}"
-    response = requests.get(SUPABASE_URL, headers=HEADERS, params=params)
-    response.raise_for_status()
-    return response.json()
+    """Page forward from after_id in ascending id order.
+
+    Ascending + paging (not the old newest-50 slice) so a cursor that has fallen
+    behind catches all the way up instead of silently skipping the gap.
+    """
+    cursor = after_id
+    while True:
+        params = {
+            "select": "*",
+            "status": "eq.Published",
+            "order": "id.asc",
+            "limit": PAGE_SIZE,
+        }
+        if cursor:
+            params["id"] = f"gt.{cursor}"
+        response = requests.get(SUPABASE_URL, headers=HEADERS, params=params)
+        response.raise_for_status()
+        batch = response.json()
+        if not batch:
+            return
+        yield from batch
+        cursor = batch[-1]["id"]
+        if len(batch) < PAGE_SIZE:
+            return
 
 
 def normalize(post):
     media = post.get("media", [])
     first = media[0] if media else {}
     return {
-        "source_id": str(post["id"]),
+        "source_id": post["id"],
         "source": "bestdesignsonx",
         "handle": post["handle"],
         "author_name": post["author_name"],
         "tweet_url": f"https://x.com{post['post_url']}",
         "tweet_text": post["tweet_text"],
         "media_type": first.get("type"),
-        "media_url": first.get("video_url") or first.get("url"),
-        "cover_url": first.get("cover") or first.get("url"),
+        # Photo entries carry "image"/"original_image_url"; only video entries
+        # have "video_url"/"cover". Reading just the video keys left every photo
+        # post with no media, so it published as a text-only thread.
+        # original_image_url is the JPEG — prefer it over the AVIF in "image",
+        # which the Meta Graph API will not ingest.
+        "media_url": (
+            first.get("video_url")
+            or first.get("original_image_url")
+            or first.get("image")
+            or first.get("url")
+        ),
+        "cover_url": (
+            first.get("cover")
+            or first.get("original_image_url")
+            or first.get("image")
+            or first.get("url")
+        ),
         "avatar_url": post.get("avatar"),
         "likes": post["interaction"].get("likes", 0),
         "views": post["interaction"].get("views", 0),
@@ -54,12 +87,9 @@ def normalize(post):
 
 
 def scrape(posts_collection):
-    latest = posts_collection.find_one({"source": "bestdesignsonx"}, sort=[("source_id", -1)])
-    after_id = int(latest["source_id"]) if latest else None
-    raw = fetch_posts(after_id=after_id)
+    after_id = high_water_mark(posts_collection, "bestdesignsonx")
     new_count = 0
-    for raw_post in raw:
-        normalized = normalize(raw_post)
-        posts_collection.insert_one(normalized)
-        new_count += 1
+    for raw_post in fetch_posts(after_id=after_id):
+        if upsert(posts_collection, normalize(raw_post)):
+            new_count += 1
     return new_count
