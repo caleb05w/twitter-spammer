@@ -55,7 +55,7 @@ Post times in MongoDB settings are stored as minutes from midnight in Pacific Ti
 
 Threads and Instagram tokens are resolved by `getThreadsToken()` / `getInstagramToken()` in `lib/tokens.ts`: the `settings` document first, then the env var. Never read `THREADS_ACCESS_TOKEN` / `IG_ACCESS_TOKEN` directly in posting code.
 
-Why: Meta long-lived tokens last 60 days and env vars cannot be rewritten at runtime, so the original tokens expired on 2026-07-31 and posting silently died. `/api/cron/refresh-tokens` (daily) refreshes the Threads token every 7 days and swaps the Instagram user token for a non-expiring Page token. `POST /api/tokens/refresh` (behind login) runs the same thing on demand.
+Why: Meta long-lived tokens last 60 days and env vars cannot be rewritten at runtime, so the original tokens expired on 2026-07-31 and posting silently died. `/api/cron/refresh-tokens` (daily) refreshes the Threads token every 7 days and swaps the Instagram user token for a non-expiring Page token — or, when the Facebook user has no Page (true for this account), re-exchanges the user token via `fb_exchange_token` every 7 days, which requires `FB_APP_SECRET`. `POST /api/tokens/refresh` (behind login) runs the same thing on demand.
 
 To rotate a token by hand: paste it into Vercel, redeploy, then hit `POST /api/tokens/refresh` (or wait for the cron). The refresh migrates the env value into the DB.
 
@@ -124,6 +124,7 @@ Adding a new source: create `bot/sources/newname.py` with a `scrape(posts_collec
 | `THREADS_ACCESS_TOKEN` | `lib/tokens.ts` (bootstrap only; DB copy wins), `bot/poster_threads.py` |
 | `IG_USER_ID` | `lib/instagram.ts`, `bot/poster_instagram.py` |
 | `IG_ACCESS_TOKEN` | `lib/tokens.ts` (bootstrap only; DB copy wins), `bot/poster_instagram.py` |
+| `FB_APP_SECRET` | `lib/tokens.ts` (Instagram user-token refresh; app secret from Meta dashboard → App settings → Basic) |
 | `BESTDESIGNSONX_SUPABASE_KEY` | `bot/sources/bestdesignsonx.py` (falls back to hardcoded anon key) |
 
 All variables live in `.env.local`. Python scripts load them via `load_dotenv` with `__file__`-relative paths (see above).

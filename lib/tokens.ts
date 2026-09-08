@@ -100,10 +100,20 @@ export async function refreshThreadsToken(): Promise<RefreshResult> {
 // Instagram posts through the Facebook Graph API, where a Page access token
 // derived from a long-lived user token never expires. So instead of refreshing
 // on a schedule, swap the user token for the Page token once and be done.
+//
+// When the Facebook user has no Page linked (this account: /me/accounts is
+// empty), fall back to re-exchanging the long-lived user token through
+// fb_exchange_token, which needs FB_APP_SECRET and hands back a fresh 60 days.
+const IG_REFRESH_EVERY_MS = 7 * 86_400_000;
+
 export async function refreshInstagramToken(): Promise<RefreshResult> {
   const s = await tokenSettings();
   if (s.ig_access_token && s.ig_token_expires_at === null) {
     return { status: "skipped", reason: "stored token is a non-expiring Page token" };
+  }
+  const igRefreshedAt = s.ig_token_refreshed_at ? new Date(s.ig_token_refreshed_at) : undefined;
+  if (s.ig_access_token && igRefreshedAt && Date.now() - igRefreshedAt.getTime() < IG_REFRESH_EVERY_MS) {
+    return { status: "skipped", reason: `refreshed ${Math.round((Date.now() - igRefreshedAt.getTime()) / 3_600_000)}h ago` };
   }
   const igUserId = process.env.IG_USER_ID;
   if (!igUserId) return { status: "failed", error: "IG_USER_ID not set" };
@@ -134,9 +144,27 @@ export async function refreshInstagramToken(): Promise<RefreshResult> {
         pages.data ?? [];
       const page = list.find((p) => p.instagram_business_account?.id === igUserId) ?? (list.length === 1 ? list[0] : undefined);
       if (!page?.access_token) {
-        throw new Error(
-          `no Page linked to IG user ${igUserId} (pages seen: ${list.map((p) => p.name).join(", ") || "none"})`
+        const secret = process.env.FB_APP_SECRET;
+        const appId = String(debug.data.app_id ?? process.env.FB_APP_ID ?? "");
+        if (!secret || !appId) {
+          throw new Error(
+            `no Page linked to IG user ${igUserId} (pages seen: ${list.map((p) => p.name).join(", ") || "none"}); ` +
+              "set FB_APP_SECRET to enable user-token refresh instead"
+          );
+        }
+        const exchanged = await graphGet(
+          `${FB_GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}` +
+            `&client_secret=${encodeURIComponent(secret)}&fb_exchange_token=${t}`
         );
+        const expiresAt = exchanged.expires_in
+          ? new Date(Date.now() + Number(exchanged.expires_in) * 1000)
+          : null;
+        await saveTokenSettings({
+          ig_access_token: String(exchanged.access_token),
+          ig_token_expires_at: expiresAt,
+          ig_token_refreshed_at: new Date(),
+        });
+        return { status: "refreshed", source, expiresAt, note: "re-exchanged long-lived user token (no Page available)" };
       }
 
       const pt = encodeURIComponent(page.access_token);
