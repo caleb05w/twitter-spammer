@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/cron/post-x",         "schedule": "*/5 * * * *" },
     { "path": "/api/cron/post-threads",   "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/post-instagram", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/post-instagram", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/refresh-tokens",  "schedule": "30 12 * * *" }
   ]
 }

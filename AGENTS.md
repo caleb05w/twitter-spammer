@@ -51,6 +51,14 @@ Post times in MongoDB settings are stored as minutes from midnight in Pacific Ti
 
 **Never hardcode `+8 * 60` to convert PT to UTC** — this breaks every summer when PT is UTC-7.
 
+### Meta tokens live in the DB and refresh themselves
+
+Threads and Instagram tokens are resolved by `getThreadsToken()` / `getInstagramToken()` in `lib/tokens.ts`: the `settings` document first, then the env var. Never read `THREADS_ACCESS_TOKEN` / `IG_ACCESS_TOKEN` directly in posting code.
+
+Why: Meta long-lived tokens last 60 days and env vars cannot be rewritten at runtime, so the original tokens expired on 2026-07-31 and posting silently died. `/api/cron/refresh-tokens` (daily) refreshes the Threads token every 7 days and swaps the Instagram user token for a non-expiring Page token. `POST /api/tokens/refresh` (behind login) runs the same thing on demand.
+
+To rotate a token by hand: paste it into Vercel, redeploy, then hit `POST /api/tokens/refresh` (or wait for the cron). The refresh migrates the env value into the DB.
+
 ### Posting to X lives in `lib/poster.ts`
 
 `postById(id: string)` downloads media (with CDN headers), uploads to Twitter v1, creates a tweet via v2, and marks the post as `status: "posted"` in MongoDB. This is the single source of truth for user-triggered X posting.
@@ -113,9 +121,9 @@ Adding a new source: create `bot/sources/newname.py` with a `scrape(posts_collec
 | `X_ACCESS_TOKEN` | `lib/poster.ts`, `bot/poster.py` |
 | `X_ACCESS_TOKEN_SECRET` | `lib/poster.ts`, `bot/poster.py` |
 | `THREADS_USER_ID` | `lib/threads.ts`, `bot/poster_threads.py` |
-| `THREADS_ACCESS_TOKEN` | `lib/threads.ts`, `bot/poster_threads.py` |
+| `THREADS_ACCESS_TOKEN` | `lib/tokens.ts` (bootstrap only; DB copy wins), `bot/poster_threads.py` |
 | `IG_USER_ID` | `lib/instagram.ts`, `bot/poster_instagram.py` |
-| `IG_ACCESS_TOKEN` | `lib/instagram.ts`, `bot/poster_instagram.py` |
+| `IG_ACCESS_TOKEN` | `lib/tokens.ts` (bootstrap only; DB copy wins), `bot/poster_instagram.py` |
 | `BESTDESIGNSONX_SUPABASE_KEY` | `bot/sources/bestdesignsonx.py` (falls back to hardcoded anon key) |
 
 All variables live in `.env.local`. Python scripts load them via `load_dotenv` with `__file__`-relative paths (see above).

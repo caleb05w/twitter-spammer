@@ -1,9 +1,81 @@
 import { NextResponse } from "next/server";
+import { TwitterApi } from "twitter-api-v2";
 import { getDb } from "@/lib/mongodb";
+import { X_POSTING_DISABLED } from "@/lib/poster";
+import { getInstagramToken, getThreadsToken } from "@/lib/tokens";
 import type { Post } from "@/lib/types";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
+
+type TokenHealth =
+  | { ok: true; account: string; expires?: string; daysLeft?: number; scopes?: string[] }
+  | { ok: false; error: string };
+
+const TIMEOUT = 10_000;
+
+// Live, read-only probe of each platform credential. Every call is a "who am I"
+// lookup — nothing is posted or changed. Meta's error 190 ("Session has
+// expired") is the signature of a dead long-lived token.
+async function threadsHealth(): Promise<TokenHealth> {
+  try {
+    const token = await getThreadsToken();
+    const res = await fetch(
+      `https://graph.threads.net/v1.0/me?fields=id,username&access_token=${encodeURIComponent(token)}`,
+      { signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" }
+    );
+    const json = await res.json();
+    if (json.error) return { ok: false, error: `code ${json.error.code}: ${json.error.message}` };
+    const idMatch = json.id === process.env.THREADS_USER_ID ? "" : ` (WARNING: id ${json.id} != THREADS_USER_ID)`;
+    return { ok: true, account: `@${json.username}${idMatch}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function instagramHealth(): Promise<TokenHealth> {
+  try {
+    const token = await getInstagramToken();
+    // debug_token reports validity, expiry and granted scopes for a Facebook token.
+    const t = encodeURIComponent(token);
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/debug_token?input_token=${t}&access_token=${t}`,
+      { signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" }
+    );
+    const json = await res.json();
+    if (json.error) return { ok: false, error: `code ${json.error.code}: ${json.error.message}` };
+    const d = json.data ?? {};
+    if (!d.is_valid) return { ok: false, error: d.error?.message ?? "token reported invalid" };
+    const expires = d.expires_at ? new Date(d.expires_at * 1000) : undefined;
+    return {
+      ok: true,
+      account: `ig user ${process.env.IG_USER_ID ?? "(IG_USER_ID unset)"}`,
+      expires: expires ? expires.toISOString() : "never (0 = does not expire)",
+      daysLeft: expires ? Math.round((expires.getTime() - Date.now()) / 86_400_000) : undefined,
+      scopes: d.scopes,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function xHealth(): Promise<TokenHealth> {
+  const { X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET } = process.env;
+  if (!X_API_KEY || !X_API_SECRET || !X_ACCESS_TOKEN || !X_ACCESS_TOKEN_SECRET)
+    return { ok: false, error: "one or more X_* env vars not set" };
+  try {
+    const client = new TwitterApi({
+      appKey: X_API_KEY,
+      appSecret: X_API_SECRET,
+      accessToken: X_ACCESS_TOKEN,
+      accessSecret: X_ACCESS_TOKEN_SECRET,
+    });
+    const me = await client.v2.me();
+    return { ok: true, account: `@${me.data.username}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 // Read-only diagnosis of why posting stalled. Sits behind the password
 // middleware like every other non-cron route, so it is reachable only once
@@ -13,6 +85,8 @@ export async function GET() {
   const posts = db.collection<Post>("posts");
   const since = (days: number) => new Date(Date.now() - days * 86_400_000);
   const daysAgo = (d?: Date) => (d ? Math.round((Date.now() - d.getTime()) / 86_400_000) : null);
+
+  const [threads, instagram, x] = await Promise.all([threadsHealth(), instagramHealth(), xHealth()]);
 
   const settingsDoc =
     (await db.collection("settings").findOne({ _id: "global" as never })) ?? {};
@@ -93,6 +167,21 @@ export async function GET() {
 
   return NextResponse.json(
     {
+      // (0) Are the credentials alive right now? Read first — if a token is
+      // dead, every section below is downstream of it.
+      tokens: {
+        threads,
+        instagram,
+        x: { ...x, postingDisabledInCode: X_POSTING_DISABLED },
+        stored: {
+          threads: settings.threads_access_token ? "db" : "env",
+          threads_expires_at: settings.threads_token_expires_at ?? null,
+          threads_refreshed_at: settings.threads_token_refreshed_at ?? null,
+          instagram: settings.ig_access_token ? "db" : "env",
+          ig_expires_at: settings.ig_token_expires_at === null ? "never" : settings.ig_token_expires_at ?? null,
+          ig_refreshed_at: settings.ig_token_refreshed_at ?? null,
+        },
+      },
       settings: {
         auto_run: settings.auto_run ?? "(unset -> false)",
         post_hours_threads: settings.post_hours_threads ?? "(unset -> [600])",
