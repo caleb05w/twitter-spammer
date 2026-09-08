@@ -10,7 +10,19 @@ export const dynamic = "force-dynamic";
 
 type TokenHealth =
   | { ok: true; account: string; expires?: string; daysLeft?: number; scopes?: string[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; fingerprint?: Fingerprint };
+
+// Non-secret shape of a token, to tell a mis-paste apart from a dead token.
+// Threads tokens start with "TH", Facebook/Instagram ones with "EAA".
+type Fingerprint = { length: number; startsWith: string; hasWhitespace: boolean; hasQuotes: boolean };
+function fingerprint(token: string): Fingerprint {
+  return {
+    length: token.length,
+    startsWith: token.slice(0, 3),
+    hasWhitespace: /\s/.test(token),
+    hasQuotes: /["']/.test(token),
+  };
+}
 
 const TIMEOUT = 10_000;
 
@@ -18,14 +30,16 @@ const TIMEOUT = 10_000;
 // lookup — nothing is posted or changed. Meta's error 190 ("Session has
 // expired") is the signature of a dead long-lived token.
 async function threadsHealth(): Promise<TokenHealth> {
+  let token = "";
   try {
-    const token = await getThreadsToken();
+    token = await getThreadsToken();
     const res = await fetch(
       `https://graph.threads.net/v1.0/me?fields=id,username&access_token=${encodeURIComponent(token)}`,
       { signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" }
     );
     const json = await res.json();
-    if (json.error) return { ok: false, error: `code ${json.error.code}: ${json.error.message}` };
+    if (json.error)
+      return { ok: false, error: `code ${json.error.code}: ${json.error.message}`, fingerprint: fingerprint(token) };
     const idMatch = json.id === process.env.THREADS_USER_ID ? "" : ` (WARNING: id ${json.id} != THREADS_USER_ID)`;
     return { ok: true, account: `@${json.username}${idMatch}` };
   } catch (e) {
@@ -34,8 +48,9 @@ async function threadsHealth(): Promise<TokenHealth> {
 }
 
 async function instagramHealth(): Promise<TokenHealth> {
+  let token = "";
   try {
-    const token = await getInstagramToken();
+    token = await getInstagramToken();
     // debug_token reports validity, expiry and granted scopes for a Facebook token.
     const t = encodeURIComponent(token);
     const res = await fetch(
@@ -43,7 +58,8 @@ async function instagramHealth(): Promise<TokenHealth> {
       { signal: AbortSignal.timeout(TIMEOUT), cache: "no-store" }
     );
     const json = await res.json();
-    if (json.error) return { ok: false, error: `code ${json.error.code}: ${json.error.message}` };
+    if (json.error)
+      return { ok: false, error: `code ${json.error.code}: ${json.error.message}`, fingerprint: fingerprint(token) };
     const d = json.data ?? {};
     if (!d.is_valid) return { ok: false, error: d.error?.message ?? "token reported invalid" };
     const expires = d.expires_at ? new Date(d.expires_at * 1000) : undefined;
